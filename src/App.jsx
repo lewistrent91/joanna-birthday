@@ -62,6 +62,7 @@ function Home({ go }) {
     { e:"🐦", t:"Joanna Bird", d:"Flap through the 1950s!", v:"bird" },
     { e:"👾", t:"Pac Mom", d:"Eat dots, avoid the ghosts!", v:"pacmom" },
     { e:"🍬", t:"Joanna Crush", d:"Match-3 with a 1950s twist!", v:"crush" },
+    { e:"🔢", t:"Sudoku", d:"Numbers puzzle — password required!", v:"sudoku" },
     { e:"🔓", t:"Decoder", d:"Crack the secret message!", v:"decoder" },
   ];
   return (
@@ -235,6 +236,7 @@ export default function App() {
   if (view==="bird") return <JoannaBird back={()=>setView("home")} />;
   if (view==="pacmom") return <PacMom back={()=>setView("home")} />;
   if (view==="crush") return <JoannaCrush back={()=>setView("home")} />;
+  if (view==="sudoku") return <SudokuGame back={()=>setView("home")} />;
   if (view==="decoder") return <DecoderGame back={()=>setView("home")} />;
   return null;
 }
@@ -1148,6 +1150,37 @@ function PuzzleGame({ back, puzzles, parts, correctAnswer, label, celebrate }) {
 // ── Decoder Game (selection screen + puzzle routing) ─────────────────────────
 function DecoderGame({ back }) {
   const [active, setActive] = useState(null); // null | 1 | 2
+  const [unlocked, setUnlocked] = useState(false);
+  const [pw, setPw] = useState('');
+  const [pwErr, setPwErr] = useState(false);
+
+  const tryPw = () => {
+    if (pw.toLowerCase() === 'trent') { setUnlocked(true); setPwErr(false); }
+    else { setPwErr(true); setPw(''); }
+  };
+
+  // Password screen
+  if (!unlocked) return (
+    <div style={{minHeight:600,display:'flex',flexDirection:'column',background:`linear-gradient(160deg,${PLUMDK},${PLUM})`}}>
+      <TopBar onBack={back} title="🔓 Decoder"/>
+      <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+        <div style={{background:'rgba(255,255,255,.08)',borderRadius:24,padding:40,maxWidth:320,width:'100%',textAlign:'center',border:`1px solid ${GOLD}33`}}>
+          <div style={{fontSize:52,marginBottom:14}}>🔒</div>
+          <div style={{color:GOLD,fontFamily:PF,fontSize:22,fontWeight:700,marginBottom:6}}>Password Required</div>
+          <div style={{color:CHAMP,fontSize:13,fontFamily:INT,marginBottom:24,opacity:.65}}>Enter the secret password to unlock the Decoder</div>
+          <input type="password" value={pw} autoFocus
+            onChange={e=>{setPw(e.target.value);setPwErr(false);}}
+            onKeyDown={e=>e.key==='Enter'&&tryPw()}
+            placeholder="Password..."
+            style={{width:'100%',padding:'13px 16px',borderRadius:12,border:`2px solid ${pwErr?'#EF5350':GOLD+'55'}`,
+              background:'rgba(255,255,255,.1)',color:'#fff',fontFamily:INT,fontSize:20,
+              marginBottom:10,outline:'none',boxSizing:'border-box',textAlign:'center',letterSpacing:8}}/>
+          {pwErr&&<div style={{color:'#EF5350',fontSize:12,fontFamily:INT,marginBottom:10}}>❌ Wrong password, try again!</div>}
+          <button onClick={tryPw} style={{background:GOLD,color:PLUM,border:'none',borderRadius:13,padding:'13px 0',fontFamily:PF,fontWeight:700,fontSize:17,cursor:'pointer',width:'100%'}}>Unlock →</button>
+        </div>
+      </div>
+    </div>
+  );
 
   if (active === 1) return (
     <PuzzleGame
@@ -2104,4 +2137,241 @@ function JoannaCrush({back}){
       </div>
     </div>
   );
+}
+
+// ── Sudoku ────────────────────────────────────────────────────────────────────
+function sudValid(b,r,c,n){
+  for(let i=0;i<9;i++) if(b[r][i]===n||b[i][c]===n) return false;
+  const br=Math.floor(r/3)*3,bc=Math.floor(c/3)*3;
+  for(let dr=0;dr<3;dr++) for(let dc=0;dc<3;dc++) if(b[br+dr][bc+dc]===n) return false;
+  return true;
+}
+function sudFill(b){
+  for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(b[r][c]===0){
+    const ns=[1,2,3,4,5,6,7,8,9].sort(()=>Math.random()-.5);
+    for(const n of ns){if(sudValid(b,r,c,n)){b[r][c]=n;if(sudFill(b))return true;b[r][c]=0;}}
+    return false;
+  }
+  return true;
+}
+function sudGen(difficulty){
+  const sol=Array.from({length:9},()=>new Array(9).fill(0));
+  sudFill(sol);
+  const keep={easy:38,medium:29,hard:23}[difficulty];
+  const puz=sol.map(r=>[...r]);
+  const pos=[...Array(81).keys()].sort(()=>Math.random()-.5);
+  let kept=81;
+  for(const p of pos){if(kept<=keep)break;puz[Math.floor(p/9)][p%9]=0;kept--;}
+  return{puz,sol};
+}
+
+function SudokuGame({back}){
+  const [screen,setScreen]=useState('select');
+  const [diff,setDiff]=useState('easy');
+  const [sol,setSol]=useState(null);
+  const [board,setBoard]=useState(null);
+  const [given,setGiven]=useState(null);
+  const [sel,setSel]=useState(null);
+  const [mistakes,setMistakes]=useState(0);
+  const [time,setTime]=useState(0);
+
+  // Refs for stale-closure-safe keyboard handler
+  const selR=useRef(null),boardR=useRef(null),givenR=useRef(null),solR=useRef(null);
+  useEffect(()=>{selR.current=sel;},[sel]);
+  useEffect(()=>{boardR.current=board;},[board]);
+  useEffect(()=>{givenR.current=given;},[given]);
+  useEffect(()=>{solR.current=sol;},[sol]);
+
+  // Timer
+  useEffect(()=>{
+    if(screen!=='play')return;
+    const id=setInterval(()=>setTime(t=>t+1),1000);
+    return()=>clearInterval(id);
+  },[screen]);
+
+  const fmt=t=>`${Math.floor(t/60)}:${(t%60).toString().padStart(2,'0')}`;
+
+  const startGame=d=>{
+    const{puz,sol:s}=sudGen(d);
+    setDiff(d);setSol(s);setBoard(puz.map(r=>[...r]));
+    setGiven(puz.map(r=>r.map(v=>v!==0)));
+    setSel(null);setMistakes(0);setTime(0);setScreen('play');
+  };
+
+  const enterNum=n=>{
+    const s=selR.current,b=boardR.current,g=givenR.current,so=solR.current;
+    if(!s||!b||!g)return;
+    if(g[s.r][s.c])return;
+    const nb=b.map(r=>[...r]);
+    nb[s.r][s.c]=n;
+    setBoard(nb);
+    if(n!==0&&so&&n!==so[s.r][s.c])setMistakes(m=>m+1);
+    if(n!==0&&so&&nb.every((row,ri)=>row.every((v,ci)=>v===so[ri][ci])))setScreen('win');
+  };
+
+  const tryPw=()=>{
+    if(pw.toLowerCase()==='trent'){setScreen('select');setPwErr(false);}
+    else{setPwErr(true);setPw('');}
+  };
+
+  // Keyboard
+  useEffect(()=>{
+    if(screen!=='play')return;
+    const onKey=e=>{
+      if(e.key>='1'&&e.key<='9')enterNum(parseInt(e.key));
+      if(e.key==='Backspace'||e.key==='Delete')enterNum(0);
+      if(e.key==='ArrowUp')setSel(s=>s?{r:Math.max(0,s.r-1),c:s.c}:s);
+      if(e.key==='ArrowDown')setSel(s=>s?{r:Math.min(8,s.r+1),c:s.c}:s);
+      if(e.key==='ArrowLeft')setSel(s=>s?{r:s.r,c:Math.max(0,s.c-1)}:s);
+      if(e.key==='ArrowRight')setSel(s=>s?{r:s.r,c:Math.min(8,s.c+1)}:s);
+    };
+    window.addEventListener('keydown',onKey);
+    return()=>window.removeEventListener('keydown',onKey);
+  },[screen]);
+
+  const CS=38;
+  const btn={background:GOLD,color:PLUM,border:'none',borderRadius:13,padding:'13px 0',
+    fontFamily:PF,fontWeight:700,fontSize:17,cursor:'pointer',width:'100%',marginBottom:10};
+
+  if(screen==='password') return(
+    <div style={{minHeight:600,display:'flex',flexDirection:'column',background:`linear-gradient(160deg,${PLUMDK},${PLUM})`}}>
+      <TopBar onBack={back} title="🔢 Sudoku"/>
+      <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+        <div style={{background:'rgba(255,255,255,.08)',borderRadius:24,padding:40,maxWidth:320,width:'100%',textAlign:'center',border:`1px solid ${GOLD}33`}}>
+          <div style={{fontSize:52,marginBottom:14}}>🔒</div>
+          <div style={{color:GOLD,fontFamily:PF,fontSize:22,fontWeight:700,marginBottom:6}}>Password Required</div>
+          <div style={{color:CHAMP,fontSize:13,fontFamily:INT,marginBottom:24,opacity:.65}}>Enter the secret password to unlock Sudoku</div>
+          <input type="password" value={pw} autoFocus
+            onChange={e=>{setPw(e.target.value);setPwErr(false);}}
+            onKeyDown={e=>e.key==='Enter'&&tryPw()}
+            placeholder="Password..."
+            style={{width:'100%',padding:'13px 16px',borderRadius:12,border:`2px solid ${pwErr?'#EF5350':GOLD+'55'}`,
+              background:'rgba(255,255,255,.1)',color:'#fff',fontFamily:INT,fontSize:20,
+              marginBottom:10,outline:'none',boxSizing:'border-box',textAlign:'center',letterSpacing:8}}/>
+          {pwErr&&<div style={{color:'#EF5350',fontSize:12,fontFamily:INT,marginBottom:10}}>❌ Wrong password, try again!</div>}
+          <button onClick={tryPw} style={{...btn,marginBottom:0}}>Unlock →</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  if(screen==='select') return(
+    <div style={{minHeight:600,display:'flex',flexDirection:'column',background:`linear-gradient(160deg,${PLUMDK},${PLUM})`}}>
+      <TopBar onBack={back} title="🔢 Sudoku"/>
+      <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:24,gap:14}}>
+        <div style={{textAlign:'center',marginBottom:8}}>
+          <div style={{color:GOLD,fontFamily:PF,fontSize:26,fontWeight:900}}>Choose Difficulty</div>
+          <div style={{color:CHAMP,fontSize:13,fontFamily:INT,opacity:.6,marginTop:4}}>How sharp is your mind today? 🧠</div>
+        </div>
+        {[
+          {d:'easy',  emoji:'🌸',label:'Easy',  desc:'38 clues — relaxed and fun',   clr:'#66BB6A'},
+          {d:'medium',emoji:'⭐',label:'Medium',desc:'29 clues — a real challenge',   clr:GOLD},
+          {d:'hard',  emoji:'🔥',label:'Hard',  desc:'23 clues — for puzzle masters!',clr:'#EF5350'},
+        ].map(({d,emoji,label,desc,clr})=>(
+          <button key={d} onClick={()=>startGame(d)}
+            style={{background:'rgba(255,255,255,.07)',border:`2px solid ${clr}44`,borderRadius:20,
+              padding:'20px 26px',cursor:'pointer',maxWidth:320,width:'100%',textAlign:'left',transition:'all .15s'}}
+            onMouseEnter={e=>{e.currentTarget.style.background='rgba(255,255,255,.13)';e.currentTarget.style.borderColor=clr;}}
+            onMouseLeave={e=>{e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.borderColor=clr+'44';}}>
+            <div style={{display:'flex',alignItems:'center',gap:14}}>
+              <div style={{fontSize:32}}>{emoji}</div>
+              <div>
+                <div style={{color:clr,fontFamily:PF,fontSize:20,fontWeight:700}}>{label}</div>
+                <div style={{color:CHAMP,fontSize:12,fontFamily:INT,opacity:.7,marginTop:2}}>{desc}</div>
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  if(screen==='win') return(
+    <div style={{minHeight:600,display:'flex',flexDirection:'column',background:`linear-gradient(160deg,${PLUMDK},${PLUM})`}}>
+      <TopBar onBack={back} title="🔢 Sudoku"/>
+      <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:24}}>
+        <div style={{background:`linear-gradient(135deg,${PLUMDK},${PLUM})`,border:`2px solid ${GOLD}`,
+          borderRadius:26,padding:'38px 32px',textAlign:'center',maxWidth:300,boxShadow:'0 20px 60px rgba(0,0,0,.6)'}}>
+          <div style={{fontSize:54,marginBottom:10}}>🧠✨</div>
+          <div style={{color:GOLD,fontFamily:PF,fontSize:26,fontWeight:900,marginBottom:6}}>Puzzle Solved!</div>
+          <div style={{color:CHAMP,fontSize:14,fontFamily:INT,marginBottom:4,opacity:.8}}>⏱ Time: {fmt(time)}</div>
+          <div style={{color:CHAMP,fontSize:14,fontFamily:INT,marginBottom:4,opacity:.8}}>❌ Mistakes: {mistakes}</div>
+          <div style={{color:CHAMP,fontSize:13,fontFamily:INT,marginBottom:24,opacity:.55,textTransform:'capitalize'}}>Difficulty: {diff}</div>
+          <button onClick={()=>startGame(diff)} style={btn}>Play Again</button>
+          <button onClick={()=>setScreen('select')} style={{background:'transparent',color:CHAMP,border:`1px solid rgba(255,255,255,.2)`,borderRadius:13,padding:'10px 0',fontFamily:INT,fontSize:13,cursor:'pointer',width:'100%'}}>Change Difficulty</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  if(screen==='play'&&board) {
+    const counts=Array.from({length:9},(_,i)=>board.reduce((s,r)=>s+r.filter(v=>v===i+1).length,0));
+    return(
+      <div style={{minHeight:600,display:'flex',flexDirection:'column',background:`linear-gradient(160deg,${PLUMDK},${PLUM})`}}>
+        <TopBar onBack={()=>setScreen('select')} title="🔢 Sudoku"
+          right={<span style={{color:GOLD,fontSize:13,fontFamily:INT,fontWeight:700}}>{fmt(time)}</span>}/>
+
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'4px 16px 2px'}}>
+          <span style={{color:CHAMP,fontSize:11,fontFamily:INT,opacity:.6,textTransform:'capitalize'}}>{diff} · {mistakes} mistake{mistakes!==1?'s':''}</span>
+          <button onClick={()=>startGame(diff)} style={{background:'none',border:`1px solid rgba(255,255,255,.18)`,borderRadius:7,color:CHAMP,fontSize:11,fontFamily:INT,cursor:'pointer',padding:'3px 10px',opacity:.6}}>New Puzzle</button>
+        </div>
+
+        {/* Grid */}
+        <div style={{display:'flex',justifyContent:'center',padding:'6px 4px 4px'}}>
+          <div style={{border:`2.5px solid ${GOLD}88`,borderRadius:6,overflow:'hidden',boxShadow:'0 6px 28px rgba(0,0,0,.5)'}}>
+            {board.map((row,r)=>(
+              <div key={r} style={{display:'flex',borderBottom:(r+1)%3===0&&r!==8?`2px solid ${GOLD}66`:`1px solid rgba(255,255,255,.1)`}}>
+                {row.map((val,c)=>{
+                  const isGiven=given[r][c];
+                  const isSel=sel?.r===r&&sel?.c===c;
+                  const isErr=val!==0&&sol&&val!==sol[r][c];
+                  const isSameN=sel&&board[sel.r]?.[sel.c]!==0&&val!==0&&val===board[sel.r][sel.c];
+                  const isRelated=sel&&(sel.r===r||sel.c===c||(Math.floor(sel.r/3)===Math.floor(r/3)&&Math.floor(sel.c/3)===Math.floor(c/3)));
+                  let bg='rgba(255,255,255,.04)';
+                  if(isSel)bg='rgba(244,196,48,.32)';
+                  else if(isSameN)bg='rgba(244,196,48,.18)';
+                  else if(isRelated)bg='rgba(255,255,255,.1)';
+                  return(
+                    <div key={c} onClick={()=>setSel({r,c})}
+                      style={{width:CS,height:CS,display:'flex',alignItems:'center',justifyContent:'center',
+                        background:bg,cursor:'pointer',userSelect:'none',transition:'background .08s',
+                        borderRight:(c+1)%3===0&&c!==8?`2px solid ${GOLD}66`:`1px solid rgba(255,255,255,.1)`,
+                        color:isErr?'#EF5350':isGiven?GOLD:'#e0e0ff',
+                        fontFamily:PF,fontSize:19,fontWeight:isGiven?700:400,boxSizing:'border-box'}}>
+                      {val!==0?val:''}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Number pad */}
+        <div style={{display:'flex',justifyContent:'center',padding:'10px 4px 4px',gap:4}}>
+          {[1,2,3,4,5,6,7,8,9].map(n=>{
+            const full=counts[n-1]>=9;
+            return(
+              <button key={n} onClick={()=>!full&&enterNum(n)}
+                style={{width:CS,height:CS+8,borderRadius:8,
+                  background:full?'rgba(255,255,255,.03)':'rgba(255,255,255,.1)',
+                  border:`1px solid rgba(255,255,255,.15)`,
+                  color:full?'rgba(255,255,255,.2)':'#fff',
+                  fontFamily:PF,fontSize:19,fontWeight:700,cursor:full?'default':'pointer'}}
+                onMouseEnter={e=>{if(!full)e.currentTarget.style.background='rgba(244,196,48,.28)';}}
+                onMouseLeave={e=>{if(!full)e.currentTarget.style.background='rgba(255,255,255,.1)';}}>
+                {n}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{display:'flex',justifyContent:'center',padding:'6px 8px 16px'}}>
+          <button onClick={()=>enterNum(0)} style={{padding:'8px 28px',borderRadius:8,
+            background:'rgba(239,83,80,.12)',border:`1px solid rgba(239,83,80,.25)`,
+            color:'#EF9A9A',fontFamily:INT,fontSize:13,cursor:'pointer'}}>⌫ Erase</button>
+        </div>
+      </div>
+    );
+  }
+  return null;
 }
