@@ -57,8 +57,7 @@ function Home({ go }) {
   const [vis, setVis] = useState(false);
   useEffect(() => { setTimeout(() => setVis(true), 80); }, []);
   const games = [
-    { e:"🧩", t:"Puzzle", d:"Upload a photo and piece it together", v:"puzzle" },
-    { e:"🎨", t:"Color by Number", d:"Paint her birthday cake", v:"color" },
+    { e:"🧩", t:"Puzzle", d:"Put the picture back together!", v:"puzzle" },
     { e:"🐦", t:"Joanna Bird", d:"Flap through the 1950s!", v:"bird" },
     { e:"👾", t:"Pac Mom", d:"Eat dots, avoid the ghosts!", v:"pacmom" },
     { e:"🍬", t:"Joanna Crush", d:"Match-3 with a 1950s twist!", v:"crush" },
@@ -93,110 +92,349 @@ function Home({ go }) {
   );
 }
 
-function Puzzle({ back }) {
-  const [img, setImg] = useState(null);
-  const [tiles, setTiles] = useState(null);
-  const [sel, setSel] = useState(null);
-  const [solved, setSolved] = useState(false);
-  const SIZE=3, TS=88;
-  const fileRef = useRef();
-  const sh = arr => { const a=[...arr]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a.every((v,i)=>v===i)?sh(a):a; };
-  const upload = e => { const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=ev=>{setImg(ev.target.result);setTiles(sh(Array.from({length:9},(_,i)=>i)));setSolved(false);setSel(null);}; r.readAsDataURL(f); };
-  const ct = pos => { if(sel===null)setSel(pos); else if(sel===pos)setSel(null); else{const t=[...tiles];[t[sel],t[pos]]=[t[pos],t[sel]];setTiles(t);setSel(null);if(t.every((v,i)=>v===i))setTimeout(()=>setSolved(true),200);} };
 
-  if (!img) return (
-    <Screen onBack={back} title="🧩 Puzzle">
-      <Card style={{ textAlign:"center" }}>
-        <div style={{ fontSize:52, marginBottom:14 }}>🖼️</div>
-        <div style={{ fontFamily:PF, fontSize:20, fontWeight:700, color:PLUM, marginBottom:10 }}>Upload a Photo of Joanna</div>
-        <p style={{ color:MUTED, fontSize:13, marginBottom:22 }}>Scrambled into a {SIZE}×{SIZE} puzzle — tap tiles to swap!</p>
-        <Btn onClick={() => fileRef.current.click()}>Choose photo</Btn>
-        <input ref={fileRef} type="file" accept="image/*" onChange={upload} style={{ display:"none" }} />
-      </Card>
-    </Screen>
-  );
-  if (solved) return (
-    <Screen onBack={back} title="🧩 Puzzle">
-      <Card style={{ textAlign:"center" }}>
-        <div style={{ fontSize:52, marginBottom:12 }}>🎉</div>
-        <div style={{ fontFamily:PF, fontSize:22, fontWeight:700, color:PLUM, marginBottom:8 }}>Puzzle Solved!</div>
-        <p style={{ color:MUTED, fontSize:13, marginBottom:22 }}>Beautifully done! 🌟</p>
-        <Btn onClick={() => { setTiles(sh(Array.from({length:9},(_,i)=>i))); setSolved(false); setSel(null); }}>Play again</Btn>
-        <Btn onClick={() => { setImg(null); setTiles(null); setSolved(false); }} v="outline" style={{ marginTop:10 }}>Change photo</Btn>
-      </Card>
-    </Screen>
-  );
-  return (
-    <Screen onBack={back} title="🧩 Puzzle">
-      <p style={{ color:CHAMP, fontSize:13, opacity:.8, marginBottom:6 }}>{sel!==null?"Now tap where to move it":"Tap a tile to select it"}</p>
-      <div style={{ display:"grid", gridTemplateColumns:`repeat(${SIZE},${TS}px)`, gap:4, background:GOLD, borderRadius:16, padding:4, width:"fit-content", margin:"0 auto" }}>
-        {tiles.map((orig,pos) => {
-          const row=Math.floor(orig/SIZE), col=orig%SIZE;
-          return <div key={pos} onClick={() => ct(pos)}
-            style={{ width:TS, height:TS, backgroundImage:`url(${img})`, backgroundSize:`${TS*SIZE}px ${TS*SIZE}px`, backgroundPosition:`-${col*TS}px -${row*TS}px`, borderRadius:10, cursor:"pointer", outline:sel===pos?"3px solid #fff":"3px solid transparent", opacity:sel===pos?.75:1, transform:sel===pos?"scale(0.93)":"scale(1)", transition:"all .15s ease" }} />;
-        })}
+// ── Puzzle Admin ──────────────────────────────────────────────────────────────
+function PuzzleAdmin({back}){
+  const [unlocked,setUnlocked]=useState(false);
+  const [pw,setPw]=useState('');
+  const [pwErr,setPwErr]=useState(false);
+  const [photos,setPhotos]=useState([]);
+  const [pending,setPending]=useState(null);
+  const [photoName,setPhotoName]=useState('');
+  const [saved,setSaved]=useState(false);
+
+  useEffect(()=>{
+    window.storage.get('j70_puzzle_photos',true).then(r=>{if(r)setPhotos(JSON.parse(r.value));}).catch(()=>{});
+  },[]);
+
+  const tryPw=()=>{
+    if(pw.toLowerCase()==='trent'){setUnlocked(true);setPwErr(false);}
+    else{setPwErr(true);setPw('');}
+  };
+
+  const onFile=e=>{
+    const f=e.target.files[0]; if(!f)return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const img=new Image();
+      img.onload=()=>{
+        const maxS=700,scale=Math.min(maxS/img.width,maxS/img.height,1);
+        const oc=document.createElement('canvas');
+        oc.width=Math.round(img.width*scale); oc.height=Math.round(img.height*scale);
+        oc.getContext('2d').drawImage(img,0,0,oc.width,oc.height);
+        setPending({src:oc.toDataURL('image/jpeg',.78)});
+        setPhotoName('');setSaved(false);
+      };
+      img.src=ev.target.result;
+    };
+    reader.readAsDataURL(f);
+  };
+
+  const savePhoto=async()=>{
+    if(!pending||!photoName.trim())return;
+    const np=[...photos,{id:Date.now(),name:photoName.trim(),src:pending.src}];
+    setPhotos(np);
+    await window.storage.set('j70_puzzle_photos',JSON.stringify(np),true);
+    setPending(null);setPhotoName('');setSaved(true);
+    setTimeout(()=>setSaved(false),3000);
+  };
+
+  const delPhoto=async(id)=>{
+    const np=photos.filter(p=>p.id!==id);
+    setPhotos(np);
+    await window.storage.set('j70_puzzle_photos',JSON.stringify(np),true);
+  };
+
+  if(!unlocked) return(
+    <div style={{minHeight:600,display:'flex',flexDirection:'column',background:`linear-gradient(160deg,${PLUMDK},${PLUM})`}}>
+      <TopBar onBack={back} title="🧩 Puzzle Admin"/>
+      <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+        <div style={{background:'rgba(255,255,255,.08)',borderRadius:24,padding:36,maxWidth:300,width:'100%',textAlign:'center',border:`1px solid ${GOLD}33`}}>
+          <div style={{fontSize:48,marginBottom:12}}>🔒</div>
+          <div style={{color:GOLD,fontFamily:PF,fontSize:20,fontWeight:700,marginBottom:20}}>Admin Password</div>
+          <input type="password" value={pw} autoFocus
+            onChange={e=>{setPw(e.target.value);setPwErr(false);}}
+            onKeyDown={e=>e.key==='Enter'&&tryPw()}
+            placeholder="Password..."
+            style={{width:'100%',padding:'12px',borderRadius:10,border:`2px solid ${pwErr?'#EF5350':GOLD+'55'}`,
+              background:'rgba(255,255,255,.1)',color:'#fff',fontFamily:INT,fontSize:18,
+              marginBottom:8,outline:'none',boxSizing:'border-box',textAlign:'center',letterSpacing:6}}/>
+          {pwErr&&<div style={{color:'#EF5350',fontSize:12,fontFamily:INT,marginBottom:8}}>Wrong password!</div>}
+          <button onClick={tryPw} style={{background:GOLD,color:PLUM,border:'none',borderRadius:10,padding:'12px 0',fontFamily:PF,fontWeight:700,fontSize:15,cursor:'pointer',width:'100%'}}>Unlock →</button>
+        </div>
       </div>
-      <div style={{ display:"flex", gap:20, marginTop:12 }}>
-        <Btn onClick={() => { setTiles(sh(Array.from({length:9},(_,i)=>i))); setSel(null); }} v="ghost">Shuffle again</Btn>
-        <Btn onClick={() => { setImg(null); setTiles(null); setSolved(false); }} v="ghost">Change photo</Btn>
+    </div>
+  );
+
+  return(
+    <div style={{minHeight:600,display:'flex',flexDirection:'column',background:`linear-gradient(160deg,${PLUMDK},${PLUM})`}}>
+      <TopBar onBack={back} title="🧩 Puzzle Admin"/>
+      <div style={{flex:1,overflowY:'auto',padding:16}}>
+        <div style={{background:'rgba(255,255,255,.07)',borderRadius:18,padding:20,marginBottom:16,border:`1px solid ${GOLD}33`}}>
+          <div style={{color:GOLD,fontFamily:PF,fontSize:17,fontWeight:700,marginBottom:12}}>➕ Add Puzzle Photo</div>
+          <label style={{display:'block',background:'rgba(255,255,255,.1)',borderRadius:10,padding:14,textAlign:'center',cursor:'pointer',border:`2px dashed ${GOLD}55`,marginBottom:12}}>
+            <input type="file" accept="image/*" onChange={onFile} style={{display:'none'}}/>
+            <div style={{color:CHAMP,fontFamily:INT,fontSize:13,opacity:.8}}>
+              {pending?'✅ Photo ready — tap to change':'📸 Tap to upload a photo'}
+            </div>
+          </label>
+          {pending&&(
+            <>
+              <img src={pending.src} alt="preview"
+                style={{display:'block',maxWidth:160,maxHeight:120,margin:'0 auto 12px',borderRadius:10,objectFit:'cover',border:`2px solid ${GOLD}44`}}/>
+              <input value={photoName} onChange={e=>setPhotoName(e.target.value)}
+                placeholder="Name this puzzle (e.g. Family at the Beach)..."
+                style={{width:'100%',padding:'10px 12px',borderRadius:10,border:`1.5px solid ${GOLD}55`,
+                  background:'rgba(255,255,255,.1)',color:'#fff',fontFamily:INT,fontSize:14,
+                  outline:'none',boxSizing:'border-box',marginBottom:8}}/>
+              <button onClick={savePhoto} disabled={!photoName.trim()}
+                style={{background:photoName.trim()?'#4CAF50':'rgba(255,255,255,.1)',color:'#fff',border:'none',borderRadius:10,
+                  padding:'11px 0',fontFamily:PF,fontWeight:700,fontSize:14,cursor:photoName.trim()?'pointer':'default',width:'100%'}}>
+                💾 Save Photo
+              </button>
+              {saved&&<div style={{color:'#4CAF50',fontFamily:INT,fontSize:12,textAlign:'center',marginTop:8}}>✅ Saved!</div>}
+            </>
+          )}
+        </div>
+
+        <div style={{color:GOLD,fontFamily:PF,fontSize:17,fontWeight:700,marginBottom:10}}>📋 Saved Photos ({photos.length})</div>
+        {photos.length===0&&<div style={{color:CHAMP,fontFamily:INT,fontSize:13,opacity:.55,textAlign:'center',padding:20}}>No photos yet. Upload one above!</div>}
+        {photos.map(p=>(
+          <div key={p.id} style={{background:'rgba(255,255,255,.07)',borderRadius:12,padding:'12px 14px',marginBottom:8,
+            display:'flex',alignItems:'center',gap:12,border:`1px solid rgba(255,255,255,.1)`}}>
+            <img src={p.src} alt={p.name} style={{width:56,height:56,objectFit:'cover',borderRadius:8,flexShrink:0}}/>
+            <div style={{flex:1}}>
+              <div style={{color:'#fff',fontFamily:INT,fontSize:13,fontWeight:600}}>{p.name}</div>
+              <div style={{color:CHAMP,fontSize:11,fontFamily:INT,opacity:.5,marginTop:2}}>3×3 · 4×4 · 5×5 available</div>
+            </div>
+            <button onClick={()=>delPhoto(p.id)}
+              style={{background:'rgba(239,83,80,.15)',border:`1px solid rgba(239,83,80,.3)`,borderRadius:8,
+                color:'#EF9A9A',fontFamily:INT,fontSize:12,cursor:'pointer',padding:'6px 12px',flexShrink:0}}>
+              🗑
+            </button>
+          </div>
+        ))}
       </div>
-    </Screen>
+    </div>
   );
 }
 
-// ── Color by Number ───────────────────────────────────────────────────────────
-function ColorByNum({ back }) {
-  const [sel, setSel] = useState(null);
-  const [fills, setFills] = useState({});
-  const [done, setDone] = useState(false);
-  const gf = id => fills[id]!==undefined ? PALETTE.find(p=>p.num===fills[id])?.hex??"#DDD" : "#E2E2E2";
-  const lc = id => fills[id]!==undefined ? "rgba(0,0,0,.28)" : "#888";
-  const click = id => { if(!sel)return; const nf={...fills,[id]:sel}; setFills(nf); if(REGIONS.every(r=>nf[r.id]===r.n))setDone(true); };
-  const sp = id => ({ fill:gf(id), stroke:"#C8C8C8", strokeWidth:"1.5", onClick:()=>click(id), style:{cursor:sel?"crosshair":"default"} });
-  return (
-    <Screen onBack={back} title="🎨 Color by Number"
-      right={<button onClick={() => { setFills({}); setDone(false); }} style={{ background:"none", border:"none", cursor:"pointer", color:CHAMP, opacity:.65, fontSize:13, fontFamily:INT }}>Reset</button>}>
-      {done && <div style={{ background:GOLD, color:PLUM, borderRadius:14, padding:"11px 20px", textAlign:"center", fontWeight:700, fontSize:14, fontFamily:PF, marginBottom:4 }}>🎉 Happy Birthday, Joanna! Your cake is gorgeous! 🎂</div>}
-      <div style={{ display:"flex", flexWrap:"wrap", gap:14, justifyContent:"center", alignItems:"flex-start" }}>
-        <div style={{ background:"#fff", borderRadius:18, boxShadow:"0 8px 28px rgba(45,15,78,.22)", padding:10 }}>
-          <svg viewBox="0 0 300 340" width="252" height="285" style={{ display:"block" }}>
-            <rect {...sp("bg")} x="0" y="0" width="300" height="340" rx="8" /><text x="15" y="22" fontSize="13" fontWeight="700" fill={lc("bg")} style={{pointerEvents:"none"}}>8</text>
-            <ellipse {...sp("plate")} cx="150" cy="314" rx="115" ry="18" /><text x="150" y="319" textAnchor="middle" fontSize="11" fontWeight="700" fill={lc("plate")} style={{pointerEvents:"none"}}>5</text>
-            <rect {...sp("tier1")} x="42" y="232" width="216" height="76" rx="6" /><text x="150" y="277" textAnchor="middle" fontSize="16" fontWeight="700" fill={lc("tier1")} style={{pointerEvents:"none"}}>2</text>
-            <rect {...sp("tier2")} x="73" y="168" width="154" height="64" rx="6" /><text x="150" y="204" textAnchor="middle" fontSize="16" fontWeight="700" fill={lc("tier2")} style={{pointerEvents:"none"}}>3</text>
-            <rect {...sp("tier3")} x="107" y="110" width="86" height="58" rx="6" /><text x="150" y="144" textAnchor="middle" fontSize="14" fontWeight="700" fill={lc("tier3")} style={{pointerEvents:"none"}}>4</text>
-            <ellipse {...sp("frost1")} cx="150" cy="232" rx="108" ry="13" /><text x="80" y="236" fontSize="10" fontWeight="700" fill={lc("frost1")} style={{pointerEvents:"none"}}>1</text>
-            <ellipse {...sp("frost2")} cx="150" cy="168" rx="77" ry="11" /><text x="108" y="172" fontSize="10" fontWeight="700" fill={lc("frost2")} style={{pointerEvents:"none"}}>1</text>
-            <ellipse {...sp("frost3")} cx="150" cy="110" rx="43" ry="9" /><text x="150" y="113" textAnchor="middle" fontSize="9" fontWeight="700" fill={lc("frost3")} style={{pointerEvents:"none"}}>1</text>
-            {[{id:"c1",x:120},{id:"c2",x:143},{id:"c3",x:166}].flatMap(c=>[
-              <rect key={c.id} {...sp(c.id)} x={c.x} y="58" width="13" height="52" rx="4" />,
-              <text key={c.id+"t"} x={c.x+6.5} y="88" textAnchor="middle" fontSize="9" fontWeight="700" fill={lc(c.id)} style={{pointerEvents:"none"}}>4</text>
-            ])}
-            {[{id:"f1",cx:126.5},{id:"f2",cx:149.5},{id:"f3",cx:172.5}].flatMap(f=>[
-              <ellipse key={f.id} {...sp(f.id)} cx={f.cx} cy="51" rx="7" ry="11" />,
-              <text key={f.id+"t"} x={f.cx} y="55" textAnchor="middle" fontSize="8" fontWeight="700" fill={lc(f.id)} style={{pointerEvents:"none"}}>6</text>
-            ])}
-            {[{id:"d1",cx:77,cy:270},{id:"d2",cx:223,cy:270},{id:"d3",cx:100,cy:202},{id:"d4",cx:200,cy:202}].flatMap(d=>[
-              <circle key={d.id} {...sp(d.id)} cx={d.cx} cy={d.cy} r="9" />,
-              <text key={d.id+"t"} x={d.cx} y={d.cy+4} textAnchor="middle" fontSize="9" fontWeight="700" fill={lc(d.id)} style={{pointerEvents:"none"}}>7</text>
-            ])}
-            <text x="150" y="303" textAnchor="middle" fontSize="22" fontWeight="900" fill="rgba(100,50,180,.45)" style={{pointerEvents:"none"}}>70</text>
-          </svg>
-        </div>
-        <div style={{ background:"#fff", borderRadius:18, boxShadow:"0 8px 28px rgba(45,15,78,.22)", padding:14, width:185 }}>
-          <div style={{ fontFamily:PF, fontWeight:700, color:PLUM, fontSize:14, marginBottom:4, textAlign:"center" }}>Color Key</div>
-          <p style={{ color:MUTED, fontSize:11, textAlign:"center", marginBottom:10 }}>{sel?`Color ${sel} selected!`:"Pick a color, then tap a region"}</p>
-          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-            {PALETTE.map(p=>(
-              <button key={p.num} onClick={()=>setSel(sel===p.num?null:p.num)} style={{ display:"flex", alignItems:"center", gap:9, borderRadius:10, padding:"6px 10px", border:`2px solid ${sel===p.num?PLUM:"#EEE"}`, background:sel===p.num?"#F3E8FF":"#fff", cursor:"pointer", fontFamily:INT, transition:"all .15s" }}>
-                <div style={{ width:22, height:22, borderRadius:5, background:p.hex, border:"1px solid #CCC", flexShrink:0 }} />
-                <span style={{ fontSize:12, fontWeight:600, color:PLUM }}>{p.num} — {p.name}</span>
-              </button>
-            ))}
-          </div>
+// ── Puzzle Game ───────────────────────────────────────────────────────────────
+function Puzzle({back,goAdmin}){
+  const [photos,setPhotos]=useState(null);
+  const [photo,setPhoto]=useState(null);
+  const [diff,setDiff]=useState(null);
+  const [tiles,setTiles]=useState(null);
+  const [sel,setSel]=useState(null);
+  const [moves,setMoves]=useState(0);
+  const [solved,setSolved]=useState(false);
+  const cvs=useRef(null);
+  const imgEl=useRef(null);
+
+  useEffect(()=>{
+    window.storage.get('j70_puzzle_photos',true).then(r=>{setPhotos(r?JSON.parse(r.value):[]);}).catch(()=>setPhotos([]));
+  },[]);
+
+  const N=diff==='easy'?3:diff==='medium'?4:5;
+  const CSIZE=300; // canvas px
+
+  const shuffle=arr=>{
+    const a=[...arr];
+    for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
+    return a;
+  };
+
+  const startGame=(p,d)=>{
+    setPhoto(p);setDiff(d);
+    const n=d==='easy'?3:d==='medium'?4:5;
+    let arr;
+    do{ arr=shuffle([...Array(n*n).keys()]); }
+    while(arr.every((v,i)=>v===i)); // ensure not already solved
+    setTiles(arr);setSel(null);setMoves(0);setSolved(false);
+  };
+
+  // Draw tiles
+  useEffect(()=>{
+    if(!tiles||!cvs.current||!imgEl.current||!imgEl.current.complete)return;
+    const n=diff==='easy'?3:diff==='medium'?4:5;
+    const ts=CSIZE/n;
+    const ctx=cvs.current.getContext('2d');
+    const img=imgEl.current;
+    ctx.clearRect(0,0,CSIZE,CSIZE);
+
+    tiles.forEach((tileId,pos)=>{
+      const pr=Math.floor(pos/n),pc=pos%n;
+      const tr=Math.floor(tileId/n),tc=tileId%n;
+      const dx=pc*ts,dy=pr*ts;
+      const iw=img.naturalWidth||img.width,ih=img.naturalHeight||img.height;
+      ctx.drawImage(img,tc*(iw/n),tr*(ih/n),iw/n,ih/n,dx,dy,ts,ts);
+
+      // Grid lines
+      ctx.strokeStyle='rgba(255,255,255,.55)';ctx.lineWidth=2;
+      ctx.strokeRect(dx+1,dy+1,ts-2,ts-2);
+
+      // Selected highlight
+      if(sel===pos){
+        ctx.fillStyle='rgba(244,196,48,.35)';ctx.fillRect(dx,dy,ts,ts);
+        ctx.strokeStyle=GOLD;ctx.lineWidth=3;ctx.strokeRect(dx+1,dy+1,ts-2,ts-2);
+      }
+    });
+
+    // Solved flash
+    if(solved){
+      ctx.fillStyle='rgba(76,175,80,.25)';ctx.fillRect(0,0,CSIZE,CSIZE);
+    }
+  },[tiles,sel,solved,diff,photo]);
+
+  const onCanvasClick=e=>{
+    if(solved||!tiles||!cvs.current)return;
+    const rect=cvs.current.getBoundingClientRect();
+    const n=diff==='easy'?3:diff==='medium'?4:5;
+    const ts=CSIZE/n;
+    const scale=CSIZE/rect.width;
+    const x=(e.clientX-rect.left)*scale,y=(e.clientY-rect.top)*scale;
+    const pos=Math.floor(y/ts)*n+Math.floor(x/ts);
+    if(pos<0||pos>=n*n)return;
+
+    if(sel===null){setSel(pos);}
+    else if(sel===pos){setSel(null);}
+    else{
+      const nt=[...tiles];
+      [nt[sel],nt[pos]]=[nt[pos],nt[sel]];
+      setTiles(nt);setSel(null);setMoves(m=>m+1);
+      if(nt.every((v,i)=>v===i))setSolved(true);
+    }
+  };
+
+  const onTouchStart=e=>{
+    e.preventDefault();
+    const touch=e.touches[0];
+    onCanvasClick({clientX:touch.clientX,clientY:touch.clientY});
+  };
+
+  if(photos===null) return(
+    <Screen onBack={back} title="🧩 Puzzle">
+      <div className="pu" style={{color:GOLD,fontFamily:PF,fontSize:18}}>Loading...</div>
+    </Screen>
+  );
+
+  // No photos
+  if(photos.length===0&&!photo) return(
+    <Screen onBack={back} title="🧩 Puzzle">
+      <div style={{textAlign:'center',padding:20}}>
+        <div style={{fontSize:56,marginBottom:16}}>🧩</div>
+        <div style={{color:GOLD,fontFamily:PF,fontSize:20,fontWeight:700,marginBottom:8}}>No puzzle photos yet!</div>
+        <div style={{color:CHAMP,fontFamily:INT,fontSize:14,opacity:.65,marginBottom:28}}>Ask the game master to add photos in the Admin portal.</div>
+        <button onClick={goAdmin} style={{background:'rgba(255,255,255,.1)',border:`1px solid ${GOLD}55`,borderRadius:12,padding:'12px 24px',color:GOLD,fontFamily:INT,fontSize:14,cursor:'pointer'}}>⚙️ Go to Admin Portal</button>
+      </div>
+    </Screen>
+  );
+
+  // Photo selection
+  if(!photo) return(
+    <Screen onBack={back} title="🧩 Puzzle"
+      right={<button onClick={goAdmin} style={{background:'none',border:'none',cursor:'pointer',color:CHAMP,fontSize:11,fontFamily:INT,opacity:.6}}>⚙️ Admin</button>}>
+      <div style={{width:'100%',maxWidth:420}}>
+        <div style={{color:CHAMP,fontFamily:INT,fontSize:13,opacity:.6,textAlign:'center',marginBottom:14}}>Choose a photo to puzzle</div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          {photos.map(p=>(
+            <button key={p.id} onClick={()=>{setPhoto(p);setDiff(null);}}
+              style={{background:'rgba(255,255,255,.07)',border:`1px solid rgba(255,255,255,.15)`,
+                borderRadius:14,overflow:'hidden',cursor:'pointer',padding:0,transition:'all .15s'}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor=GOLD+'88';}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,.15)';}}>
+              <img src={p.src} alt={p.name} style={{width:'100%',height:110,objectFit:'cover',display:'block'}}/>
+              <div style={{padding:'8px 10px',textAlign:'left'}}>
+                <div style={{color:'#fff',fontFamily:INT,fontSize:12,fontWeight:600}}>{p.name}</div>
+              </div>
+            </button>
+          ))}
         </div>
       </div>
     </Screen>
+  );
+
+  // Difficulty selection
+  if(photo&&!diff) return(
+    <Screen onBack={()=>setPhoto(null)} title="🧩 Puzzle">
+      <div style={{width:'100%',maxWidth:340}}>
+        <img src={photo.src} alt={photo.name} style={{width:'100%',maxHeight:160,objectFit:'cover',borderRadius:14,marginBottom:16,border:`2px solid ${GOLD}44`}}/>
+        <div style={{color:GOLD,fontFamily:PF,fontSize:20,fontWeight:900,textAlign:'center',marginBottom:4}}>{photo.name}</div>
+        <div style={{color:CHAMP,fontFamily:INT,fontSize:13,opacity:.6,textAlign:'center',marginBottom:18}}>Choose difficulty</div>
+        {[
+          {d:'easy',  emoji:'🌸',label:'Easy',   pieces:'9 pieces (3×3)',   clr:'#66BB6A'},
+          {d:'medium',emoji:'⭐',label:'Medium', pieces:'16 pieces (4×4)', clr:GOLD},
+          {d:'hard',  emoji:'🔥',label:'Hard',   pieces:'25 pieces (5×5)', clr:'#EF5350'},
+        ].map(({d,emoji,label,pieces,clr})=>(
+          <button key={d} onClick={()=>startGame(photo,d)}
+            style={{width:'100%',background:'rgba(255,255,255,.07)',border:`2px solid ${clr}44`,
+              borderRadius:16,padding:'16px 22px',marginBottom:10,cursor:'pointer',textAlign:'left',transition:'all .15s'}}
+            onMouseEnter={e=>{e.currentTarget.style.background='rgba(255,255,255,.13)';e.currentTarget.style.borderColor=clr;}}
+            onMouseLeave={e=>{e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.borderColor=clr+'44';}}>
+            <div style={{display:'flex',alignItems:'center',gap:14}}>
+              <div style={{fontSize:28}}>{emoji}</div>
+              <div>
+                <div style={{color:clr,fontFamily:PF,fontSize:18,fontWeight:700}}>{label}</div>
+                <div style={{color:CHAMP,fontSize:12,fontFamily:INT,opacity:.65,marginTop:2}}>{pieces}</div>
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </Screen>
+  );
+
+  // Game
+  return(
+    <div style={{minHeight:600,display:'flex',flexDirection:'column',background:`linear-gradient(160deg,${PLUMDK},${PLUM})`}}>
+      <TopBar onBack={()=>setDiff(null)} title="🧩 Puzzle"
+        right={<span style={{color:CHAMP,fontSize:11,fontFamily:INT,opacity:.6,textTransform:'capitalize'}}>{diff} · {moves} moves</span>}/>
+
+      {/* Hidden image loader */}
+      <img ref={imgEl} src={photo.src} alt="" style={{display:'none'}}
+        onLoad={()=>{if(tiles)setTiles(t=>[...t]);}}/>
+
+      <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'8px 16px 12px',gap:12}}>
+        <canvas ref={cvs} width={CSIZE} height={CSIZE}
+          onClick={onCanvasClick}
+          onTouchStart={onTouchStart}
+          style={{borderRadius:14,boxShadow:'0 8px 32px rgba(0,0,0,.55)',cursor:'pointer',
+            maxWidth:'100%',display:'block',touchAction:'none'}}/>
+
+        <div style={{color:CHAMP,fontSize:12,fontFamily:INT,opacity:.6,textAlign:'center'}}>
+          Tap a piece to select it, then tap where to move it
+        </div>
+
+        <div style={{display:'flex',gap:10}}>
+          <button onClick={()=>startGame(photo,diff)}
+            style={{padding:'10px 22px',borderRadius:10,background:'rgba(255,255,255,.1)',
+              border:`1px solid rgba(255,255,255,.2)`,color:CHAMP,fontFamily:INT,fontSize:13,cursor:'pointer'}}>
+            🔀 Shuffle
+          </button>
+          <button onClick={()=>setDiff(null)}
+            style={{padding:'10px 22px',borderRadius:10,background:'rgba(255,255,255,.08)',
+              border:`1px solid rgba(255,255,255,.15)`,color:CHAMP,fontFamily:INT,fontSize:13,cursor:'pointer',opacity:.7}}>
+            ← Difficulty
+          </button>
+        </div>
+      </div>
+
+      {solved&&(
+        <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,.75)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100}}>
+          <div style={{background:`linear-gradient(135deg,${PLUMDK},${PLUM})`,border:`2px solid ${GOLD}`,
+            borderRadius:26,padding:'38px 32px',textAlign:'center',maxWidth:300}}>
+            <div style={{fontSize:52,marginBottom:10}}>🎉</div>
+            <div style={{color:GOLD,fontFamily:PF,fontSize:26,fontWeight:900,marginBottom:6}}>Puzzle Solved!</div>
+            <div style={{color:CHAMP,fontSize:14,fontFamily:INT,marginBottom:4,opacity:.8}}>{moves} moves</div>
+            <div style={{color:CHAMP,fontSize:13,fontFamily:INT,marginBottom:24,opacity:.55,textTransform:'capitalize'}}>{diff} difficulty</div>
+            <button onClick={()=>startGame(photo,diff)} style={{background:GOLD,color:PLUM,border:'none',borderRadius:12,
+              padding:'12px 0',fontFamily:PF,fontWeight:700,fontSize:16,cursor:'pointer',width:'100%',marginBottom:8}}>Play Again</button>
+            <button onClick={()=>setDiff(null)} style={{background:'transparent',color:CHAMP,border:`1px solid rgba(255,255,255,.2)`,
+              borderRadius:12,padding:'10px 0',fontFamily:INT,fontSize:13,cursor:'pointer',width:'100%'}}>Try Another Difficulty</button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -231,8 +469,8 @@ export default function App() {
   );
 
   if (view==="home") return <Home go={setView} />;
-  if (view==="puzzle") return <Puzzle back={()=>setView("home")} />;
-  if (view==="color") return <ColorByNum back={()=>setView("home")} />;
+  if (view==="puzzle") return <Puzzle back={()=>setView("home")} goAdmin={()=>setView("puzzle-admin")} />;
+  if (view==="puzzle-admin") return <PuzzleAdmin back={()=>setView("puzzle")} />;
   if (view==="bird") return <JoannaBird back={()=>setView("home")} />;
   if (view==="pacmom") return <PacMom back={()=>setView("home")} />;
   if (view==="crush") return <JoannaCrush back={()=>setView("home")} />;
@@ -241,7 +479,6 @@ export default function App() {
   return null;
 }
 
-// ── Joanna Bird Game ──────────────────────────────────────────────────────────
 function JoannaBird({ back }) {
   const canvasRef = useRef(null);
   const stateRef = useRef("waiting");
@@ -2172,7 +2409,7 @@ function SudokuGame({back}){
   const [board,setBoard]=useState(null);
   const [given,setGiven]=useState(null);
   const [sel,setSel]=useState(null);
-  const [mistakes,setMistakes]=useState(0);
+  const [hintCell,setHintCell]=useState(null); // {r,c} of hinted cell
   const [time,setTime]=useState(0);
 
   // Refs for stale-closure-safe keyboard handler
@@ -2195,7 +2432,7 @@ function SudokuGame({back}){
     const{puz,sol:s}=sudGen(d);
     setDiff(d);setSol(s);setBoard(puz.map(r=>[...r]));
     setGiven(puz.map(r=>r.map(v=>v!==0)));
-    setSel(null);setMistakes(0);setTime(0);setScreen('play');
+    setSel(null);setTime(0);setScreen('play');setHintCell(null);
   };
 
   const enterNum=n=>{
@@ -2205,13 +2442,44 @@ function SudokuGame({back}){
     const nb=b.map(r=>[...r]);
     nb[s.r][s.c]=n;
     setBoard(nb);
-    if(n!==0&&so&&n!==so[s.r][s.c])setMistakes(m=>m+1);
+    if(n!==0) setHintCell(null); // clear hint when player fills a cell
     if(n!==0&&so&&nb.every((row,ri)=>row.every((v,ci)=>v===so[ri][ci])))setScreen('win');
   };
 
   const tryPw=()=>{
     if(pw.toLowerCase()==='trent'){setScreen('select');setPwErr(false);}
     else{setPwErr(true);setPw('');}
+  };
+
+  // Hint: find a cell with only one valid possibility and flash it
+  const giveHint=()=>{
+    const b=boardR.current, g=givenR.current, so=solR.current;
+    if(!b||!g||!so) return;
+    // Collect all empty (or wrong) unfilled cells
+    const candidates=[];
+    for(let r=0;r<9;r++) for(let c=0;c<9;c++){
+      if(!g[r][c]&&b[r][c]!==so[r][c]) candidates.push({r,c});
+    }
+    if(!candidates.length) return;
+    // Prefer a "naked single" — cell where only one number is valid
+    const naked=candidates.find(({r,c})=>{
+      let count=0;
+      for(let n=1;n<=9;n++) if(sudValid(b.map(row=>[...row]),r,c,n)){count++;if(count>1)break;}
+      return count===1;
+    });
+    const pick=naked||candidates[Math.floor(Math.random()*candidates.length)];
+    // Flash the cell for 2.5s, then fill it in
+    setHintCell(pick);
+    setSel(pick);
+    setTimeout(()=>{
+      setBoard(prev=>{
+        const nb=prev.map(row=>[...row]);
+        nb[pick.r][pick.c]=so[pick.r][pick.c];
+        if(nb.every((row,ri)=>row.every((v,ci)=>v===so[ri][ci]))) setScreen('win');
+        return nb;
+      });
+      setHintCell(null);
+    },1800);
   };
 
   // Keyboard
@@ -2295,7 +2563,6 @@ function SudokuGame({back}){
           <div style={{fontSize:54,marginBottom:10}}>🧠✨</div>
           <div style={{color:GOLD,fontFamily:PF,fontSize:26,fontWeight:900,marginBottom:6}}>Puzzle Solved!</div>
           <div style={{color:CHAMP,fontSize:14,fontFamily:INT,marginBottom:4,opacity:.8}}>⏱ Time: {fmt(time)}</div>
-          <div style={{color:CHAMP,fontSize:14,fontFamily:INT,marginBottom:4,opacity:.8}}>❌ Mistakes: {mistakes}</div>
           <div style={{color:CHAMP,fontSize:13,fontFamily:INT,marginBottom:24,opacity:.55,textTransform:'capitalize'}}>Difficulty: {diff}</div>
           <button onClick={()=>startGame(diff)} style={btn}>Play Again</button>
           <button onClick={()=>setScreen('select')} style={{background:'transparent',color:CHAMP,border:`1px solid rgba(255,255,255,.2)`,borderRadius:13,padding:'10px 0',fontFamily:INT,fontSize:13,cursor:'pointer',width:'100%'}}>Change Difficulty</button>
@@ -2312,7 +2579,7 @@ function SudokuGame({back}){
           right={<span style={{color:GOLD,fontSize:13,fontFamily:INT,fontWeight:700}}>{fmt(time)}</span>}/>
 
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'4px 16px 2px'}}>
-          <span style={{color:CHAMP,fontSize:11,fontFamily:INT,opacity:.6,textTransform:'capitalize'}}>{diff} · {mistakes} mistake{mistakes!==1?'s':''}</span>
+          <span style={{color:CHAMP,fontSize:11,fontFamily:INT,opacity:.6,textTransform:'capitalize'}}>{diff}</span>
           <button onClick={()=>startGame(diff)} style={{background:'none',border:`1px solid rgba(255,255,255,.18)`,borderRadius:7,color:CHAMP,fontSize:11,fontFamily:INT,cursor:'pointer',padding:'3px 10px',opacity:.6}}>New Puzzle</button>
         </div>
 
@@ -2322,13 +2589,15 @@ function SudokuGame({back}){
             {board.map((row,r)=>(
               <div key={r} style={{display:'flex',borderBottom:(r+1)%3===0&&r!==8?`2px solid ${GOLD}66`:`1px solid rgba(255,255,255,.1)`}}>
                 {row.map((val,c)=>{
+                  const isHint=hintCell?.r===r&&hintCell?.c===c;
                   const isGiven=given[r][c];
                   const isSel=sel?.r===r&&sel?.c===c;
                   const isErr=val!==0&&sol&&val!==sol[r][c];
                   const isSameN=sel&&board[sel.r]?.[sel.c]!==0&&val!==0&&val===board[sel.r][sel.c];
                   const isRelated=sel&&(sel.r===r||sel.c===c||(Math.floor(sel.r/3)===Math.floor(r/3)&&Math.floor(sel.c/3)===Math.floor(c/3)));
                   let bg='rgba(255,255,255,.04)';
-                  if(isSel)bg='rgba(244,196,48,.32)';
+                  if(isHint)bg='rgba(244,196,48,.42)';
+                  else if(isSel)bg='rgba(244,196,48,.32)';
                   else if(isSameN)bg='rgba(244,196,48,.18)';
                   else if(isRelated)bg='rgba(255,255,255,.1)';
                   return(
@@ -2336,9 +2605,10 @@ function SudokuGame({back}){
                       style={{width:CS,height:CS,display:'flex',alignItems:'center',justifyContent:'center',
                         background:bg,cursor:'pointer',userSelect:'none',transition:'background .08s',
                         borderRight:(c+1)%3===0&&c!==8?`2px solid ${GOLD}66`:`1px solid rgba(255,255,255,.1)`,
-                        color:isErr?'#EF5350':isGiven?GOLD:'#e0e0ff',
-                        fontFamily:PF,fontSize:19,fontWeight:isGiven?700:400,boxSizing:'border-box'}}>
-                      {val!==0?val:''}
+                        color:isHint?PLUM:isErr?'#EF5350':isGiven?GOLD:'#e0e0ff',
+                        fontFamily:PF,fontSize:19,fontWeight:isGiven||isHint?700:400,
+                        boxSizing:'border-box',boxShadow:isHint?`inset 0 0 0 2px ${GOLD}`:'none'}}>
+                      {isHint?(sol?.[r]?.[c]??''):(val!==0?val:'')}
                     </div>
                   );
                 })}
@@ -2365,10 +2635,16 @@ function SudokuGame({back}){
             );
           })}
         </div>
-        <div style={{display:'flex',justifyContent:'center',padding:'6px 8px 16px'}}>
-          <button onClick={()=>enterNum(0)} style={{padding:'8px 28px',borderRadius:8,
+        <div style={{display:'flex',justifyContent:'center',padding:'6px 8px 16px',gap:8}}>
+          <button onClick={()=>enterNum(0)} style={{padding:'8px 20px',borderRadius:8,
             background:'rgba(239,83,80,.12)',border:`1px solid rgba(239,83,80,.25)`,
             color:'#EF9A9A',fontFamily:INT,fontSize:13,cursor:'pointer'}}>⌫ Erase</button>
+          <button onClick={giveHint} disabled={!!hintCell} style={{padding:'8px 20px',borderRadius:8,
+            background:hintCell?'rgba(255,255,255,.05)':GOLD,border:'none',
+            color:hintCell?MUTED:PLUM,fontFamily:PF,fontWeight:700,fontSize:13,
+            cursor:hintCell?'default':'pointer',opacity:hintCell?.5:1,transition:'all .2s'}}>
+            💡 Hint
+          </button>
         </div>
       </div>
     );
