@@ -2409,7 +2409,8 @@ function SudokuGame({back}){
   const [board,setBoard]=useState(null);
   const [given,setGiven]=useState(null);
   const [sel,setSel]=useState(null);
-  const [hintCell,setHintCell]=useState(null); // {r,c} of hinted cell
+  const [hintCell,setHintCell]=useState(null);
+  const [checking,setChecking]=useState(false); // true for 10s when Check is pressed
   const [time,setTime]=useState(0);
 
   // Refs for stale-closure-safe keyboard handler
@@ -2480,6 +2481,13 @@ function SudokuGame({back}){
       });
       setHintCell(null);
     },1800);
+  };
+
+  // Check: highlight correct (green) and incorrect (red) player entries for 10s
+  const checkAnswers=()=>{
+    if(checking) return;
+    setChecking(true);
+    setTimeout(()=>setChecking(false), 10000);
   };
 
   // Keyboard
@@ -2592,11 +2600,15 @@ function SudokuGame({back}){
                   const isHint=hintCell?.r===r&&hintCell?.c===c;
                   const isGiven=given[r][c];
                   const isSel=sel?.r===r&&sel?.c===c;
-                  const isErr=val!==0&&sol&&val!==sol[r][c];
                   const isSameN=sel&&board[sel.r]?.[sel.c]!==0&&val!==0&&val===board[sel.r][sel.c];
                   const isRelated=sel&&(sel.r===r||sel.c===c||(Math.floor(sel.r/3)===Math.floor(r/3)&&Math.floor(sel.c/3)===Math.floor(c/3)));
+                  // Check mode: show green (correct) or red (wrong) for player entries only
+                  const isWrong=checking&&!isGiven&&val!==0&&sol&&val!==sol[r][c];
+                  const isRight=checking&&!isGiven&&val!==0&&sol&&val===sol[r][c];
                   let bg='rgba(255,255,255,.04)';
                   if(isHint)bg='rgba(244,196,48,.42)';
+                  else if(isWrong)bg='rgba(239,83,80,.22)';
+                  else if(isRight)bg='rgba(76,175,80,.22)';
                   else if(isSel)bg='rgba(244,196,48,.32)';
                   else if(isSameN)bg='rgba(244,196,48,.18)';
                   else if(isRelated)bg='rgba(255,255,255,.1)';
@@ -2605,9 +2617,10 @@ function SudokuGame({back}){
                       style={{width:CS,height:CS,display:'flex',alignItems:'center',justifyContent:'center',
                         background:bg,cursor:'pointer',userSelect:'none',transition:'background .08s',
                         borderRight:(c+1)%3===0&&c!==8?`2px solid ${GOLD}66`:`1px solid rgba(255,255,255,.1)`,
-                        color:isHint?PLUM:isErr?'#EF5350':isGiven?GOLD:'#e0e0ff',
+                        color:isHint?PLUM:isWrong?'#EF9A9A':isRight?'#A5D6A7':isGiven?GOLD:'#e0e0ff',
                         fontFamily:PF,fontSize:19,fontWeight:isGiven||isHint?700:400,
-                        boxSizing:'border-box',boxShadow:isHint?`inset 0 0 0 2px ${GOLD}`:'none'}}>
+                        boxSizing:'border-box',boxShadow:isHint?`inset 0 0 0 2px ${GOLD}`:
+                          isWrong?'inset 0 0 0 2px #EF5350':isRight?'inset 0 0 0 2px #4CAF50':'none'}}>
                       {isHint?(sol?.[r]?.[c]??''):(val!==0?val:'')}
                     </div>
                   );
@@ -2636,10 +2649,17 @@ function SudokuGame({back}){
           })}
         </div>
         <div style={{display:'flex',justifyContent:'center',padding:'6px 8px 16px',gap:8}}>
-          <button onClick={()=>enterNum(0)} style={{padding:'8px 20px',borderRadius:8,
+          <button onClick={()=>enterNum(0)} style={{padding:'8px 16px',borderRadius:8,
             background:'rgba(239,83,80,.12)',border:`1px solid rgba(239,83,80,.25)`,
             color:'#EF9A9A',fontFamily:INT,fontSize:13,cursor:'pointer'}}>⌫ Erase</button>
-          <button onClick={giveHint} disabled={!!hintCell} style={{padding:'8px 20px',borderRadius:8,
+          <button onClick={checkAnswers} disabled={checking} style={{padding:'8px 16px',borderRadius:8,
+            background:checking?'rgba(76,175,80,.15)':'rgba(76,175,80,.25)',
+            border:`1px solid rgba(76,175,80,.4)`,
+            color:checking?'#A5D6A7':'#81C784',fontFamily:PF,fontWeight:700,fontSize:13,
+            cursor:checking?'default':'pointer',transition:'all .2s'}}>
+            {checking?'✓ Checking...':'✓ Check'}
+          </button>
+          <button onClick={giveHint} disabled={!!hintCell} style={{padding:'8px 16px',borderRadius:8,
             background:hintCell?'rgba(255,255,255,.05)':GOLD,border:'none',
             color:hintCell?MUTED:PLUM,fontFamily:PF,fontWeight:700,fontSize:13,
             cursor:hintCell?'default':'pointer',opacity:hintCell?.5:1,transition:'all .2s'}}>
