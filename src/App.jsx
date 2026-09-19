@@ -1424,7 +1424,7 @@ function DecoderGame({ back }) {
       back={()=>setActive(null)}
       puzzles={P1_PUZZLES} parts={P1_PARTS}
       correctAnswer="DONTBECRUELTOAHEARTTHATSTRUE"
-      label="🎵 Puzzle 1"
+      label="🔐 Puzzle 1"
       celebrate={{
         emoji:"🎂",
         phrase:"Don't be cruel to a heart, that's true",
@@ -1440,7 +1440,7 @@ function DecoderGame({ back }) {
       back={()=>setActive(null)}
       puzzles={P2_PUZZLES} parts={P2_PARTS}
       correctAnswer="THEANSWERTOALLYOURPROBLEMSISINTHISLITTLEOLBOTTLEVITAMEATAVEGAMIN"
-      label="🍹 Puzzle 2"
+      label="🔏 Puzzle 2"
       celebrate={{
         emoji:"📺",
         phrase:"The answer to all your problems is in this little ol' bottle, Vitameatavegamin",
@@ -1456,7 +1456,7 @@ function DecoderGame({ back }) {
       back={()=>setActive(null)}
       puzzles={P3_PUZZLES} parts={P3_PARTS}
       correctAnswer="KIDNEYTRANSPLANT"
-      label="🏥 Puzzle 3"
+      label="🗝️ Puzzle 3"
       celebrate={{
         emoji:"🏥",
         phrase:"kidney transplant",
@@ -1479,9 +1479,9 @@ function DecoderGame({ back }) {
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:14,maxWidth:440,width:"100%"}}>
           {[
-            {num:1,icon:"🎵",title:"Puzzle 1",subtitle:"Don't Be Cruel",desc:"An Elvis Presley classic — decoded through 6 different cipher challenges",accent:"#92400E",bg:"#FEFCE8"},
-            {num:2,icon:"📺",title:"Puzzle 2",subtitle:"Vitameatavegamin",desc:"An I Love Lucy special — 5 stations inspired by the 1950s TV show",accent:"#7C3AED",bg:"#F5F3FF"},
-            {num:3,icon:"🏥",title:"Puzzle 3",subtitle:"Kidney Transplant",desc:"A 1950 medical milestone — 5 stations using all-new cipher types",accent:"#0369A1",bg:"#EFF6FF"},
+            {num:1,icon:"🔐",title:"Puzzle 1",subtitle:"6 cipher stations",desc:"Crack each station to reveal a piece of the secret phrase",accent:"#92400E",bg:"#FEFCE8"},
+            {num:2,icon:"🔏",title:"Puzzle 2",subtitle:"5 cipher stations",desc:"Decode each clue to unlock the hidden message",accent:"#7C3AED",bg:"#F5F3FF"},
+            {num:3,icon:"🗝️",title:"Puzzle 3",subtitle:"5 cipher stations",desc:"Five all-new cipher types stand between you and the answer",accent:"#0369A1",bg:"#EFF6FF"},
           ].map(({num,icon,title,subtitle,desc,accent,bg})=>(
             <button key={num} onClick={()=>setActive(num)} style={{
               background:"rgba(255,255,255,.97)",borderRadius:20,
