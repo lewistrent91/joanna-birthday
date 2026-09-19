@@ -1334,7 +1334,7 @@ function PuzzleGame({ back, puzzles, parts, correctAnswer, label, celebrate }) {
                 <input value={inputs[p.id]||""} onChange={e=>setInputs(i=>({...i,[p.id]:e.target.value}))}
                   onKeyDown={e=>e.key==="Enter"&&checkPuzzle(p)}
                   placeholder="Type your decoded answer here…"
-                  style={{width:"100%",boxSizing:"border-box",border:`2px solid ${errors[p.id]?"#FB7185":"#E5E7EB"}`,borderRadius:12,padding:"12px 16px",fontFamily:INT,fontSize:15,outline:"none",marginBottom:10,background:errors[p.id]?"#FFF1F2":"#F9FAFB",transition:"border-color .2s"}} />
+                  style={{width:"100%",boxSizing:"border-box",border:`2px solid ${errors[p.id]?"#FB7185":"#E5E7EB"}`,borderRadius:12,padding:"12px 16px",fontFamily:INT,fontSize:15,outline:"none",marginBottom:10,background:errors[p.id]?"#FFF1F2":"#F9FAFB",color:"#111827",transition:"border-color .2s"}} />
                 <div style={{display:"flex",gap:10}}>
                   <button onClick={()=>checkPuzzle(p)} style={{flex:1,background:p.color,border:"none",borderRadius:12,padding:"12px",color:"#fff",fontFamily:INT,fontWeight:700,fontSize:14,cursor:"pointer"}}>
                     Check Answer ✓
@@ -1374,7 +1374,7 @@ function PuzzleGame({ back, puzzles, parts, correctAnswer, label, celebrate }) {
             <input value={answerInput} onChange={e=>setAnswerInput(e.target.value)}
               onKeyDown={e=>e.key==="Enter"&&checkFinal()}
               placeholder="Type the full decoded phrase…"
-              style={{width:"100%",boxSizing:"border-box",border:`2px solid ${answerError?"#FB7185":"#E5E7EB"}`,borderRadius:12,padding:"13px 16px",fontFamily:INT,fontSize:15,outline:"none",marginBottom:10,background:answerError?"#FFF1F2":"#F9FAFB",transition:"border-color .2s"}} />
+              style={{width:"100%",boxSizing:"border-box",border:`2px solid ${answerError?"#FB7185":"#E5E7EB"}`,borderRadius:12,padding:"13px 16px",fontFamily:INT,fontSize:15,outline:"none",marginBottom:10,background:answerError?"#FFF1F2":"#F9FAFB",color:"#111827",transition:"border-color .2s"}} />
             {answerError&&<p style={{color:"#DC2626",fontSize:13,fontFamily:INT,textAlign:"center",marginBottom:10,fontWeight:500}}>Not quite — keep trying!</p>}
             <Btn onClick={checkFinal} style={{background:PLUM,color:"#fff"}}>Submit Phrase 🔓</Btn>
           </>
